@@ -37,41 +37,60 @@ import Wallet.Emulator.Wallet
 {-# INLINABLE tokenPolicy #-}
 
 -- Defining Minting Validator
-tokenPolicy :: PaymentPubKeyHash -> String -> () -> ScriptContext -> Bool
-tokenPolicy pkh collection () sContext = txSignedBy (scriptContextTxInfo sContext) $ unPaymentPubKeyHash pkh
+tokenPolicy :: TxOutRef -> TokenName -> () -> ScriptContext -> Bool
+tokenPolicy outputRef assetName () scriptContext = 
+    traceIfFalse "UTxO not consumed"   hasUTxO &&
+    traceIfFalse "Wrong nft amount"  checkIfNotMinted
+                    
+    where
+        info :: TxInfo
+        info = scriptContextTxInfo scriptContext
+        
+        hasUTxO :: Bool
+        hasUTxO = any (\utxo -> txInInfoOutRef utxo == outputRef) $ txInfoInputs info       
+        
+        checkIfNotMinted :: Bool
+        checkIfNotMinted = case flattenValue (txInfoMint info) of
+          [(_, assetName', amount)] -> assetName' == assetName && amount == 1
+          _-> False     
 
-policy :: PaymentPubKeyHash -> String -> Scripts.MintingPolicy Typed
-policy pkh collection = mkMintingPolicyScript $
-             		$$(PlutusTx.compile [|| \pkh' collection' -> Scripts.wrapMintingPolicy $ tokenPolicy pkh' collection' ||])
-             		`PlutusTx.applyCode`
-             		PlutusTx.liftCode pkh     
-             		`PlutusTx.applyCode`
-             		PlutusTx.liftCode collection  
+-- Building Policy Script
+policy :: TxOutRef -> TokenName -> Scripts.MintingPolicy
+policy outputRef assetName = mkMintingPolicyScript $
+    $$(PlutusTx.compile [|| \outputRef' assetName' -> Scripts.wrapMintingPolicy $ tokenPolicy outputRef' assetName' ||])
+    `PlutusTx.applyCode`
+    PlutusTx.liftCode outputRef
+    `PlutusTx.applyCode`
+    PlutusTx.liftCode assetName        
 
 
 -- Extracting Policy ID    
-tokenSymbol :: PaymentPubKeyHash -> String -> CurrencySymbol
-tokenSymbol = \pkh' collection' -> scriptCurrencySymbol $ policy pkh' collection'
+tokenSymbol :: TxOutRef -> TokenName -> CurrencySymbol
+tokenSymbol outputRef assetName = scriptCurrencySymbol $ policy outputRef assetName
 
 -- OFF-CHAIN
 
 -- Defining minting lambda
 mint :: NFTMintParams -> Contract w NFTSchema Text ()
-mint mparams = do              
-               pkh <- Contract.ownPaymentPubKeyHash
-               let val = Value.singleton (tokenSymbol pkh (mCollection mparams)) (mToken mparams) 1
-                   lookups = Constraints.mintingPolicy (policy pkh (mCollection mparams))
-                   tx      = Constraints.mustMintValue val
-               ledgerTx <- submitTxConstraintsWith @Void lookups tx
-               void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
-               Contract.logInfo @String $ printf "Forged %s" (show val)
+mint np = do
+    utxos <- utxosAt $ mAddress np
+    case Map.keys utxos of
+        []       -> Contract.logError @String "No utxo found"
+        outputRef : _ -> do
+            let tn      = mToken np
+            let val     = Value.singleton (tokenSymbol outputRef tn) tn 1
+                lookups = Constraints.mintingPolicy (policy outputRef tn) <> Constraints.unspentOutputs utxos
+                tx      = Constraints.mustMintValue val <> Constraints.mustSpendPubKeyOutput outputRef
+            ledgerTx <- submitTxConstraintsWith @Void lookups tx
+            void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
+            Contract.logInfo @String $ printf "Forged %s" (show val)
 
 
 -- Defining minting input parameters
 data NFTMintParams = NFTMintParams
     { mToken   :: !TokenName
     , mAddress :: !Address
-    , mCollection :: !String
+    , rAddress :: !Address
     } deriving (Generic, FromJSON, ToJSON, Show)
 
 
@@ -90,8 +109,7 @@ endpoints = awaitPromise mint' >> endpoints
 
 test :: IO ()
 test = runEmulatorTraceIO $ do
-    let c = "CDP"
-        t1 = "Halloween_0001_L1"
+    let t1 = "Halloween_0001_L1"
         t2 = "Halloween_0002_L1"
         w1 = knownWallet 1
         w2 = knownWallet 2
@@ -100,12 +118,12 @@ test = runEmulatorTraceIO $ do
     callEndpoint @"mint" h1 $ NFTMintParams
         { mToken   = t1
         , mAddress = mockWalletAddress w1
-        , mCollection = c
+        , rAddress = mockWalletAddress w2
         }
     void $ Emulator.waitNSlots 1
     callEndpoint @"mint" h1 $ NFTMintParams
         { mToken   = t2
         , mAddress = mockWalletAddress w1
-        , mCollection = c
+        , rAddress = mockWalletAddress w2
         }
     void $ Emulator.waitNSlots 1
