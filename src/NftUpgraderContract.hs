@@ -21,8 +21,9 @@
 -- [ ] Add minting condition to allow users to mint upgraded NFT with genesis NFT and Serum
 -- [ ] Verify that input tokens meet the required condition, i.e. L1 + S1 = L2
 -- [ ] Burn the input tokens
--- [ ] Generalize for L2, L3, etc..
+-- [?] Generalize for L2, L3, etc..
 -- [?] Payment for the genesis mint
+-- [?] Multisig account for admin wallet minting genesis collection
 
 module NftUpgraderContract where
 
@@ -50,10 +51,13 @@ import           CustomRedeemer
 
 -- ON-CHAIN
 
-{-# INLINABLE tokenPolicy #-}
+
 -- Defining Minting Validator
-tokenPolicy :: RedeemerParam -> ScriptContext -> Bool
-tokenPolicy (RP outRef tkName mintAmount pkHash) sContext = traceIfFalse "Can not give the NFT"  givingPath 
+  
+
+{-# INLINABLE tokenPolicy #-}
+tokenPolicy :: PaymentPubKeyHash -> RedeemerParam -> ScriptContext -> Bool
+tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can not give the NFT"  givingPath 
        where
            givingPath :: Bool
            givingPath = traceIfFalse "UTxO not consumed" hasUTxO &&
@@ -79,15 +83,15 @@ tokenPolicy (RP outRef tkName mintAmount pkHash) sContext = traceIfFalse "Can no
            checkIfRecieved :: Bool
            checkIfRecieved = True        
 
-policy :: PaymentPubKeyHash -> Scripts.MintingPolicy
-policy pkHash = mkMintingPolicyScript $ 
-                $$(PlutusTx.compile [|| Scripts.wrapMintingPolicy $ tokenPolicy ||]) 
-                -- `PlutusTx.applyCode`
-                -- PlutusTx.liftCode pkHash
+policy :: PaymentPubKeyHash -> RedeemerParam -> Scripts.MintingPolicy
+policy pkHash redeemer = mkMintingPolicyScript $ 
+                $$(PlutusTx.compile [|| Scripts.wrapMintingPolicy . tokenPolicy ||]) 
+                  `PlutusTx.applyCode`
+                    PlutusTx.liftCode pkHash
 
 -- Extracting policy ID    
-tokenSymbol :: PaymentPubKeyHash -> CurrencySymbol
-tokenSymbol = scriptCurrencySymbol . policy
+tokenSymbol :: PaymentPubKeyHash -> RedeemerParam -> CurrencySymbol
+tokenSymbol pkHash = scriptCurrencySymbol . policy pkHash
 
 -- OFF-CHAIN
 
@@ -120,10 +124,10 @@ mintDrop mParams = do
                  outRef : _ -> do 
                                 let tkName     = uniqueName (mToken mParams) outRef
                                     mAmt       = mAmount mParams
-                                    redeemer   = (RP outRef tkName mAmt pkHash)
-                                    nft        = Value.singleton (tokenSymbol pkHash) tkName mAmt 
+                                    redeemer   = (RP outRef tkName mAmt)
+                                    nft        = Value.singleton (tokenSymbol pkHash redeemer) tkName mAmt 
                                     val        = (Ada.lovelaceValueOf 2_000_000) <> nft
-                                    lookups    = Constraints.mintingPolicy (policy pkHash)  <>
+                                    lookups    = Constraints.mintingPolicy (policy pkHash redeemer)  <>
                                                  Constraints.unspentOutputs utxos
                                     tx         = Constraints.mustMintValueWithRedeemer (Redeemer $ PlutusTx.toBuiltinData redeemer) nft <>                                               Constraints.mustSpendPubKeyOutput outRef <> 
                                                  Constraints.mustPayToPubKey (PaymentPubKeyHash $ fromJust $ toPubKeyHash $ mReceiver mParams) val
