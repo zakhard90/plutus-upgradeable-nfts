@@ -9,9 +9,10 @@ import           Ledger             (TxOutRef, TokenName, PaymentPubKeyHash)
 
 -- Defining custom redeemer
 data RedeemerParam = RP
-                   { rOutRef :: TxOutRef
-                   , rTokenName :: TokenName
-                   , rPkHash :: PaymentPubKeyHash
+                   { rOutRef     :: TxOutRef
+                   , rTokenName  :: TokenName
+                   , rMintAmount :: Integer
+                   , rPkHash     :: PaymentPubKeyHash
                    }  
 
 PlutusTx.makeIsDataIndexed ''RedeemerParam [('RP,0)]
