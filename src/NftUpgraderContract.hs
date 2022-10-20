@@ -63,7 +63,7 @@ import           CustomRedeemer
 
 {-# INLINABLE tokenPolicy #-}
 tokenPolicy :: PaymentPubKeyHash -> RedeemerParam -> ScriptContext -> Bool
-tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can not give the NFT"  givingPath 
+tokenPolicy pkHash redeemer@(RP outRef tkName mintAmount) sContext = traceIfFalse "Can not give the NFT"  givingPath 
        where
            givingPath :: Bool
            givingPath = traceIfFalse "UTxO not consumed" hasUTxO &&
@@ -77,6 +77,9 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
            utxoInputs :: [TxInInfo]
            utxoInputs = txInfoInputs info
 
+           utxoOutputs :: [TxOut]
+           utxoOutputs = txInfoOutputs info
+
            hasUTxO :: Bool
            hasUTxO = any (\utxo -> txInInfoOutRef utxo == outRef) utxoInputs
   
@@ -87,9 +90,6 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
            
            checkIfOriginalOrUpgrade :: Bool
            checkIfOriginalOrUpgrade = checkIfOriginal || checkIfUpgrade          
-             
-           checkIfUpgrade :: Bool
-           checkIfUpgrade = (>=) (length utxoInputs) 3
               
            checkIfOriginal :: Bool
            checkIfOriginal = checkIfSigned && checkIfGenesis
@@ -110,27 +110,42 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
            tokenLevel = Builtins.indexByteString tokenId 6
                      
            isSerum :: Bool
-           isSerum = tokenType == serumType
+           isSerum = (==) tokenType serumType
 
            isPlayable :: Bool
-           isPlayable =  tokenType == playableType     
+           isPlayable =  (==) tokenType playableType     
            
            isNft :: Bool
-           isNft =  isPlayable && mintAmount == 1           
+           isNft =  isPlayable && (==) mintAmount 1           
            
            isFirstLevel :: Bool
-           isFirstLevel =  tokenLevel == 49       
+           isFirstLevel =  (==) tokenLevel 49       
            
            isFirstLevelNft :: Bool
            isFirstLevelNft =  isNft && isFirstLevel 
            
            checkIfGenesis :: Bool
-           checkIfGenesis = isSerum || isFirstLevelNft
-                            
+           checkIfGenesis = isSerum || isFirstLevelNft      
+           
+           nftInputValue :: Value
+           nftInputValue = Value.singleton (tokenSymbol pkHash redeemer) tkName mintAmount
+           
+           -- todo fix error
+           hasNftInput :: Bool
+           hasNftInput = any (\utxo -> (==) nftInputValue (txOutValue $ txInInfoResolved utxo)) utxoInputs                      
+                                   
+           checkIfUpgrade :: Bool
+           checkIfUpgrade = False
+           
+           -- ownSymbol = V.ownCurrencySymbol ctx
+           -- minted = V.txInfoMint txinfo
+           -- expected = currencyValue ownSymbol c
            
            -- todo
            checkIfRecieved :: Bool
            checkIfRecieved = True        
+
+
 
 serumType :: Integer
 serumType = 83
