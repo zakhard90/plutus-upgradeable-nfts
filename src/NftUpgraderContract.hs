@@ -39,19 +39,25 @@ import           Plutus.Trace.Emulator          as Emulator
 import qualified PlutusTx
 import           PlutusTx.Prelude               hiding (Semigroup(..), unless)
 import qualified PlutusTx.Builtins              as Builtins
-import qualified PlutusTx.Builtins.Class        as Class
 import           Ledger                         hiding (mint, singleton)
 import           Ledger.Constraints             as Constraints
 import qualified Ledger.Typed.Scripts           as Scripts
 import           Ledger.Ada                     as Ada
 import           Ledger.Value                   as Value
-import           Prelude                        (IO, Show (..), String, Int, Semigroup(..), read, undefined)
+import           Prelude                        (IO, Show (..), String, Semigroup(..), undefined)
 import           Text.Printf                    (printf)
 import           Wallet.Emulator.Wallet
 import           CustomRedeemer
 
 -- ON-CHAIN
 
+-- Types
+-- L -> 76
+-- S -> 83
+
+-- Level
+-- 1 -> 49
+-- 2 -> 50
 
 -- Defining Minting Validator  
 
@@ -97,22 +103,40 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
            tokenIndex :: BuiltinByteString
            tokenIndex = Builtins.sliceByteString 0 4 tokenId
            
-           tokenType :: BuiltinByteString
-           tokenType = Builtins.sliceByteString 5 1 tokenId
+           tokenType :: Integer
+           tokenType = Builtins.indexByteString tokenId 5
            
-           --isSerum :: Bool
-           --isSerum = Class.fromBuiltin (Builtins.equalsByteString tokenType $ Class.fromString "S")
+           tokenLevel :: Integer
+           tokenLevel = Builtins.indexByteString tokenId 6
+                     
+           isSerum :: Bool
+           isSerum = tokenType == serumType
+
+           isPlayable :: Bool
+           isPlayable =  tokenType == playableType     
            
-           tokenLevel :: BuiltinByteString
-           tokenLevel = Builtins.sliceByteString 6 1 tokenId
+           isNft :: Bool
+           isNft =  isPlayable && mintAmount == 1           
+           
+           isFirstLevel :: Bool
+           isFirstLevel =  tokenLevel == 49       
+           
+           isFirstLevelNft :: Bool
+           isFirstLevelNft =  isNft && isFirstLevel 
            
            checkIfGenesis :: Bool
-           checkIfGenesis = (==) (Builtins.lengthOfByteString $ unTokenName tkName) 26 && 
-                            (==) (Builtins.lengthOfByteString $ Builtins.sliceByteString 10 7 $ unTokenName tkName) 7
+           checkIfGenesis = isSerum || isFirstLevelNft
+                            
            
            -- todo
            checkIfRecieved :: Bool
            checkIfRecieved = True        
+
+serumType :: Integer
+serumType = 83
+           
+playableType :: Integer
+playableType = 76
 
 policy :: PaymentPubKeyHash -> RedeemerParam -> Scripts.MintingPolicy
 policy pkHash redeemer = mkMintingPolicyScript $ 
@@ -156,7 +180,8 @@ mintDrop mParams = do
                                 let tkName     = uniqueName (mToken mParams) outRef
                                     tkId       = Builtins.sliceByteString 10 7 $ unTokenName tkName
                                     tkIndex    = Builtins.sliceByteString 0 4 tkId
-                                    tkLevel    = Builtins.sliceByteString 5 2 tkId
+                                    tkType     = Builtins.indexByteString tkId 5
+                                    tkLevel    = Builtins.indexByteString tkId 6
                                     
                                     mAmt       = mAmount mParams
                                     redeemer   = (RP outRef tkName mAmt)
@@ -172,6 +197,7 @@ mintDrop mParams = do
                                 Contract.logInfo @String $ printf "TokenName length %d" (Builtins.lengthOfByteString $ unTokenName tkName) 
                                 Contract.logInfo @String $ printf "ID %s" (show $ tkId)
                                 Contract.logInfo @String $ printf "Index %s" (show $ tkIndex)
+                                Contract.logInfo @String $ printf "Type %s" (show $ tkType)
                                 Contract.logInfo @String $ printf "Level %s" (show $ tkLevel)
                                 Contract.logInfo @String $ printf "Forged %s" (show val)             
 
@@ -209,18 +235,26 @@ endpoints = awaitPromise (mint' `select` upgrade') >> endpoints
 test :: IO ()
 test = runEmulatorTraceIO $ do
 
-    let t1 = "Halloween_0001_L1_"
+    let s1 = "Halloween_0000_S1_"
+        qs = 5
+        t1 = "Halloween_0001_L1_"
         q1 = 1
         t2 = "Halloween_0002_L1_"
         q2 = 1
         t3 = "Halloween_0001_L2_"
         q3 = 1
-        s1 = "Halloween_0000_S1_"
-        qs = 1000
         w1 = knownWallet 1
         w2 = knownWallet 2
     h1 <- activateContractWallet w1 endpoints
     h2 <- activateContractWallet w2 endpoints
+    
+    callEndpoint @"mint" h1 $ NFTMintParams
+        { mToken   = s1
+        , mAmount   = qs
+        , mAddress = mockWalletAddress w1
+        , mReceiver = mockWalletAddress w2
+        }
+    void $ Emulator.waitNSlots 1
     callEndpoint @"mint" h1 $ NFTMintParams
         { mToken    = t1
         , mAmount   = q1
@@ -231,13 +265,6 @@ test = runEmulatorTraceIO $ do
     callEndpoint @"mint" h1 $ NFTMintParams
         { mToken   = t2
         , mAmount   = q2
-        , mAddress = mockWalletAddress w1
-        , mReceiver = mockWalletAddress w2
-        }
-    void $ Emulator.waitNSlots 1
-    callEndpoint @"mint" h1 $ NFTMintParams
-        { mToken   = s1
-        , mAmount   = qs
         , mAddress = mockWalletAddress w1
         , mReceiver = mockWalletAddress w2
         }
