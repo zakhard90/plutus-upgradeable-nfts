@@ -17,8 +17,8 @@
 -- [x] Minting policy for a collection, i.e. same CurrencySymbol for all minted NFTs
 -- [x] Enforce uniqueness on TokenName (Modular asset name + id + level + slice of hashed txid)
 -- [x] Mintable Serum token with a custom amount
--- [ ] Traverse tx inputs to get utxos with genesis NFT and Serum
--- [ ] Add minting condition to allow users to mint upgraded NFT with genesis NFT and Serum
+-- [o] Traverse tx inputs to get utxos with genesis NFT and Serum
+-- [o] Add minting condition to allow users to mint upgraded NFT with genesis NFT and Serum
 -- [ ] Verify that input tokens meet the required condition, i.e. L1 + S1 = L2
 -- [ ] Burn the input tokens
 -- [?] Generalize for L2, L3, etc..
@@ -32,7 +32,7 @@ import           Data.Aeson                     (ToJSON, FromJSON)
 import           Data.Map                       as Map
 import           Data.Text                      (Text, pack)
 import           Data.Void                      (Void)
-import           Data.Maybe
+import qualified Data.Maybe                     as Maybe
 import           GHC.Generics                   (Generic)
 import           Plutus.Contract                as Contract
 import           Plutus.Trace.Emulator          as Emulator
@@ -44,6 +44,7 @@ import           Ledger.Constraints             as Constraints
 import qualified Ledger.Typed.Scripts           as Scripts
 import           Ledger.Ada                     as Ada
 import           Ledger.Value                   as Value
+import qualified Ledger.Contexts                as Contexts		
 import           Prelude                        (IO, Show (..), String, Semigroup(..), undefined)
 import           Text.Printf                    (printf)
 import           Wallet.Emulator.Wallet
@@ -76,6 +77,9 @@ tokenPolicy pkHash redeemer@(RP outRef tkName mintAmount) sContext = traceIfFals
            
            utxoInputs :: [TxInInfo]
            utxoInputs = txInfoInputs info
+
+           curSymbol :: CurrencySymbol
+           curSymbol = Contexts.ownCurrencySymbol sContext
 
            utxoOutputs :: [TxOut]
            utxoOutputs = txInfoOutputs info
@@ -119,23 +123,35 @@ tokenPolicy pkHash redeemer@(RP outRef tkName mintAmount) sContext = traceIfFals
            isNft =  isPlayable && (==) mintAmount 1           
            
            isFirstLevel :: Bool
-           isFirstLevel =  (==) tokenLevel 49       
+           isFirstLevel =  (==) tokenLevel 49   
+           
+           isNextLevel :: Bool
+           isNextLevel =  (==) tokenLevel 50    
            
            isFirstLevelNft :: Bool
-           isFirstLevelNft =  isNft && isFirstLevel 
+           isFirstLevelNft = isNft && isFirstLevel 
            
            checkIfGenesis :: Bool
-           checkIfGenesis = isSerum || isFirstLevelNft      
+           checkIfGenesis = isSerum || isFirstLevelNft
            
-           nftInputValue :: Value
-           nftInputValue = Value.singleton (tokenSymbol pkHash redeemer) tkName mintAmount
+           ptkString :: BuiltinByteString
+           ptkString =  Builtins.appendByteString 
+                                    (Builtins.sliceByteString 0 16 $ unTokenName tkName)  
+                                    (Builtins.consByteString (tokenLevel - 1) (Builtins.emptyByteString))               
+           
+           checkInputNft :: TxInInfo -> Bool
+           checkInputNft utxo = case flattenValue (txOutValue $ txInInfoResolved utxo) of
+              [(cs, tkn, amt)]   ->  cs == curSymbol && 
+                                     Builtins.equalsByteString ptkString (Builtins.sliceByteString 0 17 $ unTokenName tkn) && 
+                                     amt == 1
+              _                  ->  False                             
            
            -- todo fix error
            hasNftInput :: Bool
-           hasNftInput = any (\utxo -> (==) nftInputValue (txOutValue $ txInInfoResolved utxo)) utxoInputs                      
+           hasNftInput = any (\utxo -> checkInputNft utxo) utxoInputs                      
                                    
            checkIfUpgrade :: Bool
-           checkIfUpgrade = False
+           checkIfUpgrade = isNextLevel && hasNftInput
            
            -- ownSymbol = V.ownCurrencySymbol ctx
            -- minted = V.txInfoMint txinfo
@@ -146,6 +162,9 @@ tokenPolicy pkHash redeemer@(RP outRef tkName mintAmount) sContext = traceIfFals
            checkIfRecieved = True        
 
 
+{-# INLINABLE findOwnInput' #-}
+findOwnInput' :: ScriptContext -> TxInInfo
+findOwnInput' ctx = fromMaybe (error ()) (findOwnInput ctx)
 
 serumType :: Integer
 serumType = 83
@@ -160,6 +179,7 @@ policy pkHash redeemer = mkMintingPolicyScript $
                     PlutusTx.liftCode pkHash
 
 -- Extracting policy ID    
+{-# INLINABLE tokenSymbol #-}
 tokenSymbol :: PaymentPubKeyHash -> RedeemerParam -> CurrencySymbol
 tokenSymbol pkHash = scriptCurrencySymbol . policy pkHash
 
@@ -193,6 +213,8 @@ mintDrop mParams = do
                  []       -> Contract.logError @String "No UTxO found on the provied Address!" 
                  outRef : _ -> do 
                                 let tkName     = uniqueName (mToken mParams) outRef
+                                    
+                                    -- Test purpose info
                                     tkId       = Builtins.sliceByteString 10 7 $ unTokenName tkName
                                     tkIndex    = Builtins.sliceByteString 0 4 tkId
                                     tkType     = Builtins.indexByteString tkId 5
@@ -205,10 +227,11 @@ mintDrop mParams = do
                                     lookups    = Constraints.mintingPolicy (policy pkHash redeemer)  <>
                                                  Constraints.unspentOutputs utxos
                                     tx         = Constraints.mustMintValueWithRedeemer (Redeemer $ PlutusTx.toBuiltinData redeemer) nft <>                                               Constraints.mustSpendPubKeyOutput outRef <> 
-                                                 Constraints.mustPayToPubKey (PaymentPubKeyHash $ fromJust $ toPubKeyHash $ mReceiver mParams) val
+                                                 Constraints.mustPayToPubKey (PaymentPubKeyHash $ Maybe.fromJust $ toPubKeyHash $ mReceiver mParams) val
                                 ledgerTx <- submitTxConstraintsWith @Void lookups tx
                                 void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
                                 
+                                Contract.logInfo @String $ printf "MINT"
                                 Contract.logInfo @String $ printf "TokenName length %d" (Builtins.lengthOfByteString $ unTokenName tkName) 
                                 Contract.logInfo @String $ printf "ID %s" (show $ tkId)
                                 Contract.logInfo @String $ printf "Index %s" (show $ tkIndex)
@@ -216,9 +239,44 @@ mintDrop mParams = do
                                 Contract.logInfo @String $ printf "Level %s" (show $ tkLevel)
                                 Contract.logInfo @String $ printf "Forged %s" (show val)             
 
--- Defining minting function
-upgrade :: NFTUpgradeParams -> Contract w NFTSchema Text ()
-upgrade uParams = undefined  
+-- Defining upgrading function
+mintUpgrade :: NFTUpgradeParams -> Contract w NFTSchema Text ()
+mintUpgrade uParams = do   
+               utxos <- utxosAt $ uAddress uParams 
+               
+               case Map.keys utxos of
+                 []       -> Contract.logError @String "No UTxO found on the provied Address!" 
+                 outRef : _ -> do 
+                                let tkName     = uniqueName (uToken uParams) outRef
+                                
+                                    -- Test purpose info
+                                    tkId       = Builtins.sliceByteString 10 7 $ unTokenName tkName
+                                    tkIndex    = Builtins.sliceByteString 0 4 tkId
+                                    tkType     = Builtins.indexByteString tkId 5
+                                    tkLevel    = Builtins.indexByteString tkId 6
+                                    pkHash     = PaymentPubKeyHash $ Maybe.fromJust $ toPubKeyHash $ uMinter uParams
+                                    prevNft    = Builtins.appendByteString 
+                                                    (Builtins.sliceByteString 0 16 $ unTokenName tkName)  
+                                                    (Builtins.consByteString (tkLevel - 1) (Builtins.emptyByteString))
+                                    
+                                    mAmt       = 1
+                                    redeemer   = (RP outRef tkName mAmt)
+                                    nft        = Value.singleton (tokenSymbol pkHash redeemer) tkName mAmt 
+                                    val        = (Ada.lovelaceValueOf 2_000_000) <> nft
+                                    lookups    = Constraints.mintingPolicy (policy pkHash redeemer)  <>
+                                                 Constraints.unspentOutputs utxos
+                                    tx         = Constraints.mustMintValueWithRedeemer (Redeemer $ PlutusTx.toBuiltinData redeemer) nft <>                                               Constraints.mustSpendPubKeyOutput outRef
+                                ledgerTx <- submitTxConstraintsWith @Void lookups tx
+                                void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
+                                
+                                Contract.logInfo @String $ printf "UPGRADE"
+                                Contract.logInfo @String $ printf "TokenName length %d" (Builtins.lengthOfByteString $ unTokenName tkName) 
+                                Contract.logInfo @String $ printf "Prev. Level %s" (show $ prevNft)
+                                Contract.logInfo @String $ printf "ID %s" (show $ tkId)
+                                Contract.logInfo @String $ printf "Index %s" (show $ tkIndex)
+                                Contract.logInfo @String $ printf "Type %s" (show $ tkType)
+                                Contract.logInfo @String $ printf "Level %s" (show $ tkLevel)
+                                Contract.logInfo @String $ printf "Forged %s" (show val) 
 
 -- Defining minting and dropping input parameters
 data NFTMintParams = NFTMintParams
@@ -230,8 +288,9 @@ data NFTMintParams = NFTMintParams
 
 -- Defining nft upgrading input parameters
 data NFTUpgradeParams = NFTUpgradeParams
-    { uPolicy   :: !TokenName
+    { uToken    :: !TokenName
     , uAddress  :: !Address
+    , uMinter   :: !Address
     } deriving (Generic, FromJSON, ToJSON, Show)
 
 -- Defining endpoint input binding
@@ -243,7 +302,7 @@ endpoints :: Contract () NFTSchema Text ()
 endpoints = awaitPromise (mint' `select` upgrade') >> endpoints
   where
     mint' = endpoint @"mint" mintDrop
-    upgrade' = endpoint @"upgrade" upgrade     
+    upgrade' = endpoint @"upgrade" mintUpgrade     
 
 -- SIMULATOR
 
@@ -256,20 +315,12 @@ test = runEmulatorTraceIO $ do
         q1 = 1
         t2 = "Halloween_0002_L1_"
         q2 = 1
-        t3 = "Halloween_0001_L2_"
-        q3 = 1
+        u1 = "Halloween_0001_L2_"
         w1 = knownWallet 1
         w2 = knownWallet 2
     h1 <- activateContractWallet w1 endpoints
     h2 <- activateContractWallet w2 endpoints
     
-    callEndpoint @"mint" h1 $ NFTMintParams
-        { mToken   = s1
-        , mAmount   = qs
-        , mAddress = mockWalletAddress w1
-        , mReceiver = mockWalletAddress w2
-        }
-    void $ Emulator.waitNSlots 1
     callEndpoint @"mint" h1 $ NFTMintParams
         { mToken    = t1
         , mAmount   = q1
@@ -278,16 +329,22 @@ test = runEmulatorTraceIO $ do
         }
     void $ Emulator.waitNSlots 1
     callEndpoint @"mint" h1 $ NFTMintParams
-        { mToken   = t2
+        { mToken    = t2
         , mAmount   = q2
-        , mAddress = mockWalletAddress w1
-        , mReceiver = mockWalletAddress w2
+        , mAddress  = mockWalletAddress w1
+        , mReceiver = mockWalletAddress w1
         }
     void $ Emulator.waitNSlots 1
-    callEndpoint @"mint" h2 $ NFTMintParams
-        { mToken   = t3
-        , mAmount   = q3
-        , mAddress = mockWalletAddress w2
+    callEndpoint @"upgrade" h2 $ NFTUpgradeParams
+        { uToken    = u1
+        , uAddress  = mockWalletAddress w2
+        , uMinter   = mockWalletAddress w1
+        }
+    callEndpoint @"mint" h1 $ NFTMintParams
+        { mToken    = s1
+        , mAmount   = qs
+        , mAddress  = mockWalletAddress w1
         , mReceiver = mockWalletAddress w2
         }
+    void $ Emulator.waitNSlots 1    
     void $ Emulator.waitNSlots 1          
