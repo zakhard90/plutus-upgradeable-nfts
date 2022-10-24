@@ -1,7 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude      #-}
 {-# LANGUAGE TemplateHaskell        #-}
 
-module CustomRedeemer where
+module NftUpgrader.PolicyRedeemer where
 
 import qualified PlutusTx
 import           PlutusTx.Prelude
