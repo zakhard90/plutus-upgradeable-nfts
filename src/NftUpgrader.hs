@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings      #-}
-
 -- TODO
 -- [x] Working minting policy for NFTs with modular asset name
 -- [x] Minting policy for a collection, i.e. same CurrencySymbol for all minted NFTs
