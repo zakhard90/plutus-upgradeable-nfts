@@ -9,8 +9,8 @@
 -- [x] Add minting condition to allow users to mint upgraded NFT with genesis NFT and Serum
 -- [x] Verify that input tokens meet the required condition, i.e. L1 + S1 = L2
 -- [ ] Verify that the correct token is minted on upgrade
--- [ ] Generalize upgrade Tx construction to handle a different number of input UTxOs
--- [ ] Burn the input tokens
+-- [x] Generalize upgrade Tx construction to handle a different number of input UTxOs
+-- [x] Burn the input tokens
 -- [x] Generalize for L2, L3, etc..
 -- [?] Payment for the genesis mint
 -- [?] Multisig account for admin wallet minting genesis collection

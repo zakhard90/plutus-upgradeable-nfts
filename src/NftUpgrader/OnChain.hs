@@ -19,7 +19,7 @@ import qualified Ledger.Contexts                as Contexts
 -- Defining Minting Validator
 {-# INLINABLE tokenPolicy #-}
 tokenPolicy :: PaymentPubKeyHash -> RedeemerParam -> ScriptContext -> Bool
-tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can not give the NFT"  givingPath 
+tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can not mint the NFT"  givingPath 
        where
            givingPath :: Bool
            givingPath = traceIfFalse "UTxO not consumed" hasUTxO &&
@@ -43,9 +43,8 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
            hasUTxO = any (\utxo -> txInInfoOutRef utxo == outRef) utxoInputs
   
            checkMintedAmount :: Bool
-           checkMintedAmount = case flattenValue (txInfoMint info) of
-              [(_, tkName', amount)]   ->  tkName' == tkName && amount == mintAmount
-              _                        ->  False  
+           checkMintedAmount = case getMintedTokenValue $ flattenValue (txInfoMint info) of
+              (_, tkName', amount)   ->  tkName' == tkName && amount == mintAmount              
            
            checkIfOriginalOrUpgrade :: Bool
            checkIfOriginalOrUpgrade = checkIfOriginal || checkIfUpgrade          

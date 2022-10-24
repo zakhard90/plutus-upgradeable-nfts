@@ -1,9 +1,12 @@
+{-# LANGUAGE NumericUnderscores     #-}
+
 module NftUpgrader.Utility where
 
 import           Data.Text                      (pack)
 import           PlutusTx.Prelude               hiding (Semigroup(..), unless)
 import qualified PlutusTx.Builtins              as Builtins
 import           Ledger                         hiding (mint, singleton)
+import           Ledger.Ada                     as Ada
 import           Ledger.Value                   as Value
 import           Prelude                        (Show (..))
 
@@ -26,10 +29,17 @@ uniqueName tn ou = TokenName $ Builtins.appendByteString (unTokenName tn) finger
            idx :: BuiltinByteString
            idx = Builtins.encodeUtf8 $ Builtins.toBuiltin $ pack $ show $ txOutRefIdx ou 
 
+-- Verify if a Tx output has a some lovelace value                                 
+{-# INLINABLE hasLovelaveAtUtxo #-}
+hasLovelaveAtUtxo :: TxOut -> Bool
+hasLovelaveAtUtxo tx = case flattenValue $ txOutValue tx of
+                        [(cur, _, amount)]  ->  cur == Ada.adaSymbol && amount > 5_000_000
+                        _                   ->  False
+
 -- Verify if a Tx output has a specific currency and token                                 
 {-# INLINABLE hasTokenAtUtxo #-}
 hasTokenAtUtxo :: TxOut -> CurrencySymbol -> BuiltinByteString -> Bool
-hasTokenAtUtxo tx policyId tkString = hasTokenAtFlatValue (flattenValue $ txOutValue $ tx) policyId tkString  
+hasTokenAtUtxo tx policyId tkString = hasTokenAtFlatValue (flattenValue $ txOutValue tx) policyId tkString  
 
 -- Verify if a flat value has a specific currency and token 
 {-# INLINABLE hasTokenAtFlatValue #-}
@@ -48,6 +58,34 @@ isMatchingFlatValue (cs, tkn, amt) policyId tkString = cs == policyId && amt > 0
 -- Verify if the initial part of a token name matches a desired string value                                               
 isMatchingToken :: TokenName -> BuiltinByteString -> Bool
 isMatchingToken tkName tkString = Builtins.equalsByteString (Builtins.sliceByteString 0 17 $ unTokenName tkName) tkString                                   
+
+-- Get custom token name from value                                               
+{-# INLINABLE getTokenNameFromValue #-}
+getTokenNameFromValue :: Value -> TokenName
+getTokenNameFromValue val = case flattenValue val of
+                             [] -> TokenName $ Builtins.emptyByteString
+                             vs -> getTokenNameFromFlatValue vs 
+
+-- Get custom token name from flat value
+getTokenNameFromFlatValue :: [(CurrencySymbol, TokenName, Integer)] -> TokenName
+getTokenNameFromFlatValue vals = case vals of
+                                  []                 -> TokenName $ Builtins.emptyByteString
+                                  [(_, tkn, _)]     -> tkn
+                                  (v@(_, tkn, _):vs) -> if isTokenFlatValue v 
+                                                        then tkn
+                                                        else getTokenNameFromFlatValue vs
+
+-- Verify if flat value entry is from a custom token
+isTokenFlatValue :: (CurrencySymbol, TokenName, Integer) -> Bool
+isTokenFlatValue (cs, _, _) = cs /= Ada.adaSymbol
+
+-- Get entry with custom token from flat value
+{-# INLINABLE getMintedTokenValue #-}
+getMintedTokenValue :: [(CurrencySymbol, TokenName, Integer)] -> (CurrencySymbol, TokenName, Integer)
+getMintedTokenValue vals = case vals of 
+                             []                       -> (Ada.adaSymbol, Ada.adaToken, 0)
+                             [v]                      -> v
+                             (v@(_, _, amount): vs)   -> if amount > 0 then v else getMintedTokenValue vs 
 
 -- Compose a string corresponding to a specific serum required to perform an nft upgrade
 {-# INLINABLE buildSerumString #-}
