@@ -18,6 +18,8 @@ Serum is a fungible token which enables a level-up action. There are different l
 
 L1 + S1 = L2 .. and so on
 
+# eUTxO flow diagram
+![Visual representation of the UTxO flow](https://github.com/zakhard90/plutus-upgradeable-nfts/blob/main/NftUpgrader.png)
 
 # Instructions
 
