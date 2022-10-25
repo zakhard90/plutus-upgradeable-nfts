@@ -15,8 +15,8 @@ Examlple -> Halloween_0036_L2
 <table border="0">
  <tr>
     <td><b style="font-size:30px">Level 1 NFT</b></td>
-    <td><b style="font-size:30px">Serum</b></td>
-   <td><b style="font-size:30px">Level 2 NFT</b></td>
+    <td><b style="font-size:30px">+ Level 1 Serum</b></td>
+   <td><b style="font-size:30px">= Level 2 NFT</b></td>
  </tr>
  <tr>
     <td><img src="https://github.com/zakhard90/plutus-upgradeable-nfts/blob/main/SkeletonWarrior_L1.png"></td>
