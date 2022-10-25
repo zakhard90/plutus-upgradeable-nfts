@@ -11,7 +11,19 @@ Final project for Cardano Developer Professional course
   - ID: Zero-padded value like 0001, 1-9999
   - Level: Integer value representing the current level, 1,2,3, etc..
 Examlple -> Halloween_0036_L2
----
+
+<table border="0">
+ <tr>
+    <td><b style="font-size:30px">Level 1 NFT</b></td>
+    <td><b style="font-size:30px">Serum</b></td>
+   <td><b style="font-size:30px">Level 2 NFT</b></td>
+ </tr>
+ <tr>
+    <td><img src="https://github.com/zakhard90/plutus-upgradeable-nfts/blob/main/SkeletonWarrior_L1.png"></td>
+    <td><img width="250px" height="auto" src="https://github.com/zakhard90/plutus-upgradeable-nfts/blob/main/SerumToken.png"></td>
+    <td><img src="https://github.com/zakhard90/plutus-upgradeable-nfts/blob/main/SkeletonWarrior_L2.png"></td>
+ </tr>
+</table>
 
 Monster is an NFT representing a collectible character card.
 Serum is a fungible token which enables a level-up action. There are different levels of serum.
@@ -57,4 +69,6 @@ To build and run the project you need to:
 
 8. Test the project with the Emulator Trace functionality by running `NftUpgrader.Tests.upgradeSequence`
 
+---
 
+**Disclaimer**: NFT illustrations were generated with DALL-E
