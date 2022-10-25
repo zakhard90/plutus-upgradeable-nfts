@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE TypeApplications       #-}
 {-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE NumericUnderscores     #-}
 
 module NftUpgrader.Tests where
 
@@ -9,6 +10,7 @@ import           NftUpgrader.OffChain
 import           Control.Monad                  hiding (fmap)
 import           PlutusTx.Prelude               hiding (Semigroup(..), unless)
 import           Prelude                        (IO)
+import           Ledger.Ada                     as Ada
 import           Wallet.Emulator.Wallet 
 import           Plutus.Trace.Emulator          as Emulator
 
@@ -40,7 +42,7 @@ upgradeSequence = runEmulatorTraceIO $ do
         , mAmount   = qs
         , mAddress  = mockWalletAddress w1
         , mReceiver = mockWalletAddress w2
-        }   
+        }      
     void $ Emulator.waitNSlots 1
     callEndpoint @"mint" h1 $ NFTMintParams
         { mToken    = t2
@@ -62,7 +64,7 @@ upgradeAdvSequence = runEmulatorTraceIO $ do
 
     let s1 = "Halloween_0000_S1_"
         s2 = "Halloween_0000_S2_"
-        qs = 5
+        qs = 1
         t1 = "Halloween_0034_L1_"
         q  = 1
         u1 = "Halloween_0034_L2_"
@@ -78,8 +80,7 @@ upgradeAdvSequence = runEmulatorTraceIO $ do
         , mAddress  = mockWalletAddress w1
         , mReceiver = mockWalletAddress w2
         }
-    void $ Emulator.waitNSlots 1
-    
+    void $ Emulator.waitNSlots 1    
     callEndpoint @"mint" h1 $ NFTMintParams
         { mToken    = s1
         , mAmount   = qs
@@ -93,6 +94,8 @@ upgradeAdvSequence = runEmulatorTraceIO $ do
         , uMinter   = mockWalletAddress w1
         }
     void $ Emulator.waitNSlots 1
+    void $ Emulator.payToWallet w1 w2 (Ada.lovelaceValueOf 10_000_000)
+    void $ Emulator.waitNSlots 1 
     callEndpoint @"mint" h1 $ NFTMintParams
         { mToken    = s2
         , mAmount   = qs
