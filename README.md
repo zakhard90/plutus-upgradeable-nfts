@@ -69,6 +69,8 @@ To build and run the project you need to:
 
 8. Test the project with the Emulator Trace functionality by running `NftUpgrader.Tests.upgradeSequence`
 
+The Token names resulting from the test can be inspected with [this converter](https://dencode.com/en/string/hex).
+
 ---
 
 **Disclaimer**: NFT illustrations were generated with DALL-E
