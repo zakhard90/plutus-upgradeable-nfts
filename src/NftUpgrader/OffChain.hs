@@ -39,6 +39,8 @@ mintDrop :: NFTMintParams -> Contract w NFTSchema Text ()
 mintDrop mParams = do   
                utxos <- utxosAt $ mAddress mParams  
                pkHash <- Contract.ownPaymentPubKeyHash   
+               
+               Contract.logInfo @String $ printf "MINT"
   
                case Map.keys utxos of
                  []       -> Contract.logError @String "No UTxO found on the provied Address!" 
@@ -50,8 +52,6 @@ mintDrop mParams = do
                                     -- Test purpose info
                                     tkId       = Builtins.sliceByteString 10 7 $ unTokenName tkName
                                     tkIndex    = Builtins.sliceByteString 0 4 tkId
-                                    tkType     = Builtins.indexByteString tkId 5
-                                    tkLevel    = Builtins.indexByteString tkId 6
                                     
                                     mAmt       = mAmount mParams
                                     redeemer   = (RP oref tkName mAmt)
@@ -62,12 +62,9 @@ mintDrop mParams = do
                                     tx         = Constraints.mustMintValueWithRedeemer (Redeemer $ PlutusTx.toBuiltinData redeemer) nft <>                                               Constraints.mustSpendPubKeyOutput oref <> 
                                                  Constraints.mustPayToPubKey (PaymentPubKeyHash $ Maybe.fromJust $ toPubKeyHash $ mReceiver mParams) val
                                 
-                                Contract.logInfo @String $ printf "MINT"
-                                Contract.logInfo @String $ printf "TokenName length %d" (Builtins.lengthOfByteString $ unTokenName tkName) 
-                                Contract.logInfo @String $ printf "ID %s" (show $ tkId)
-                                Contract.logInfo @String $ printf "Index %s" (show $ tkIndex)
-                                Contract.logInfo @String $ printf "Type %s" (show $ tkType)
-                                Contract.logInfo @String $ printf "Level %s" (show $ tkLevel)
+                                Contract.logInfo @String $ printf "TokenName length --> %d" (Builtins.lengthOfByteString $ unTokenName tkName) 
+                                Contract.logInfo @String $ printf "ID               --> %s" (show $ tkId)
+                                Contract.logInfo @String $ printf "Index            --> %s" (show $ tkIndex)
                                 
                                 ledgerTx <- submitTxConstraintsWith @Void lookups tx
                                 void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
@@ -78,7 +75,9 @@ mintDrop mParams = do
 mintUpgrade :: NFTUpgradeParams -> Contract w NFTSchema Text ()
 mintUpgrade uParams = do   
              utxos <- utxosAt $ uAddress uParams 
-             Contract.logInfo @String $ printf "UTxOs count %s" (show $ length (Map.keys utxos))
+             
+             Contract.logInfo @String $ printf "UPGRADE"
+             Contract.logInfo @String $ printf "UTxOs count      --> %s" (show $ length (Map.keys utxos))
                               
              case Map.assocs utxos of
                []    -> Contract.logError @String "No UTxO found on the provied Address!" 
@@ -105,9 +104,7 @@ mintUpgrade uParams = do
                                     
                             -- Test purpose info
                             tkId       = Builtins.sliceByteString 10 7 $ unTokenName tkName
-                            tkIndex    = Builtins.sliceByteString 0 4 tkId
-                            tkType     = Builtins.indexByteString (unTokenName tkName) 9
-                            tkLevel    = Builtins.indexByteString tkId 6                                    
+                            tkIndex    = Builtins.sliceByteString 0 4 tkId                                  
                            
                             mAmt       = 1
                             redeemer   = (RP or1 tkName mAmt)
@@ -123,22 +120,16 @@ mintUpgrade uParams = do
                                          Constraints.mustSpendPubKeyOutput or3 <>
                                          Constraints.mustMintValueWithRedeemer (Redeemer $ PlutusTx.toBuiltinData redeemer) inNft <>
                                          Constraints.mustMintValueWithRedeemer (Redeemer $ PlutusTx.toBuiltinData redeemer) inSerum
-                                    
-                        Contract.logInfo @String $ printf "UPGRADE"
-                        Contract.logInfo @String $ printf "TokenName length %d" (Builtins.lengthOfByteString $ unTokenName tkName) 
-                        Contract.logInfo @String $ printf "Prev. Level %s" (show $ prevNftStr) 
-                        Contract.logInfo @String $ printf "Serum %s" (show $ serumStr) 
-                        Contract.logInfo @String $ printf "ID %s" (show $ tkId)
-                        Contract.logInfo @String $ printf "Index %s" (show $ tkIndex)
-                        Contract.logInfo @String $ printf "Type %s" (show $ tkType)
-                        Contract.logInfo @String $ printf "Level %s" (show $ tkLevel)
+                        
+                        Contract.logInfo @String $ printf "TokenName length --> %d" (Builtins.lengthOfByteString $ unTokenName tkName) 
+                        Contract.logInfo @String $ printf "ID               --> %s" (show $ tkId)
+                        Contract.logInfo @String $ printf "Index            --> %s" (show $ tkIndex)
+                        Contract.logInfo @String $ printf "Prev. Level      --> %s" (show $ prevNftStr) 
+                        Contract.logInfo @String $ printf "Serum            --> %s" (show $ serumStr) 
                                
-                        Contract.logInfo @String $ printf "UTxO 1 has token %s" (show $ hasTokenAtUtxo (toTxOut ot1) policyId prevNftStr)
-                        Contract.logInfo @String $ printf "UTxO 1 has serum %s" (show $ hasTokenAtUtxo (toTxOut ot1) policyId serumStr)
-                        Contract.logInfo @String $ printf "UTxO 2 has token %s" (show $ hasTokenAtUtxo (toTxOut ot2) policyId prevNftStr)
-                        Contract.logInfo @String $ printf "UTxO 2 has serum %s" (show $ hasTokenAtUtxo (toTxOut ot2) policyId serumStr)
-                        Contract.logInfo @String $ printf "UTxO 3 has token %s" (show $ hasTokenAtUtxo (toTxOut ot3) policyId prevNftStr)
-                        Contract.logInfo @String $ printf "UTxO 3 has serum %s" (show $ hasTokenAtUtxo (toTxOut ot3) policyId serumStr)
+                        Contract.logInfo @String $ printf "UTxO 1 has ada   --> %s" (show $ hasLovelaveAtUtxo (toTxOut ot1))
+                        Contract.logInfo @String $ printf "UTxO 2 has token --> %s" (show $ hasTokenAtUtxo (toTxOut ot2) policyId prevNftStr)
+                        Contract.logInfo @String $ printf "UTxO 3 has serum --> %s" (show $ hasTokenAtUtxo (toTxOut ot3) policyId serumStr)
 
                         ledgerTx <- submitTxConstraintsWith @Void lookups tx
                         void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
