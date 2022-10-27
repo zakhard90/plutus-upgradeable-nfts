@@ -87,7 +87,7 @@ The contract minting policy allows any user to mint a new non genesis (L2+) NFT 
 - Ada
 - NFT
 - Serum
-- 
+
 To be able to produce the same CurrencySymbol, the user upgrading an NFT has to provide the PaymentPubKeyHash of the collection author account. In the process of upgrading, the input tokens are burned.
 
 ## Test scenarios
