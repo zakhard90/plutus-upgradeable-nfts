@@ -26,7 +26,7 @@ The contract validator allows to perform multiple operations:
  - Minting of the upgraded NFTs by the user owning the original (L2, L3...)
 
 To enforce the rules required for these functionalities, some specific design choices were made for the minting policy configuration:
-- The policy id (CurrencySymbol) is **the same for all tokens**, and determines the uniqueness of an entire collection rather then of a single token. To achieve this, the PaymentPubKeyHash of the author has to be provided.
+- The policy id (CurrencySymbol) is **the same for all tokens**, and determines the uniqueness of an entire collection rather than of a single token. To achieve this, the PaymentPubKeyHash of the author has to be provided.
 - The asset name (TokenName) has to follow a **modular fomat** to allow us to store some information in it: 
   - Type template
     - Monster (NFT): Halloween_{ID}_L{Level}
