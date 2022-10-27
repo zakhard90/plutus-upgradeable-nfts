@@ -77,11 +77,23 @@ To build and run the project you need to:
 # Functionality overview
 
 ## Genesis NFT minting
+The original L1 NFTs can be minted only by the collection author, i.e. the user deploying the contract. A PaymentPubKeyHash is used to define a unique CurrencySymbol for the whole collection. The TokenName follows a specific pattern and the positions of the bytes corresponding to different segments are currently fixed. The collection author is also allowed to directly transfer the newly minted tokens to any wallet.
 
 ## Serum FT minting
+With a specific TokenName a Serum fungible token can be minted by the collection author. The mint can be performed for an arbitrary amount of tokens, the validator makes sure that there is no confusion between NFT and FT minting. To keep the same byte positions in both cases, the Serum's TokenName value contains a filler of zeros without any functionality.
 
 ## NFT upgrading
+The contract minting policy allows any user to mint a new non genesis (L2+) NFT just by possesing both an NFT of a lower level and the corresponding Serum. The validation process requires 3 UTxO inputs carrying different values each:
+- Ada
+- NFT
+- Serum
+- 
+To be able to produce the same CurrencySymbol, the user upgrading an NFT has to provide the PaymentPubKeyHash of the collection author account. In the process of upgrading, the input tokens are burned.
 
+## Test scenarios
+There are currently 2 test sequences:
+- NftUpgrader.Tests.upgradeSequence - performs a series of different token mints and a final upgrade
+- NftUpgrader.Tests.upgradeAdvSequence - performs a series of mints with the goal of leveling-up an NFT to L3
 
 The Token name values resulting from the test can be inspected with [this converter](https://dencode.com/en/string/hex).
 
@@ -105,7 +117,6 @@ For example`0x48616c6c6f7765656e5f303030325f4c315f289f7b836bf5b15e` can be split
 
 48616c6c6f7765656e5f303030325f4c31 --> Halloween_0002_L1
 ```
-
 
 ---
 
