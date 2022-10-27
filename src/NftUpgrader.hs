@@ -9,8 +9,5 @@
 -- [x] Generalize upgrade Tx construction to handle a different number of input UTxOs
 -- [x] Burn the input tokens
 -- [x] Generalize for L2, L3, etc..
--- [ ] Verify that the correct token is minted on upgrade
--- [?] Payment for the genesis mint
--- [?] Multisig account for admin wallet minting genesis collection
 
 module NftUpgrader where

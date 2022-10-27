@@ -2,13 +2,12 @@
 
 module NftUpgrader.Utility where
 
-import           Data.Text                      (pack)
 import           PlutusTx.Prelude               hiding (Semigroup(..), unless)
 import qualified PlutusTx.Builtins              as Builtins
 import           Ledger                         hiding (mint, singleton)
 import           Ledger.Ada                     as Ada
 import           Ledger.Value                   as Value
-import           Prelude                        (Show (..))
+import           Prelude                        (Show)
 
 -- Enforce a really unique value for the token name
 {-# INLINABLE uniqueName #-}
@@ -27,7 +26,7 @@ uniqueName tn ou = TokenName $ Builtins.appendByteString (unTokenName tn) finger
            tx = getTxId $ txOutRefId ou
            
            idx :: BuiltinByteString
-           idx = Builtins.encodeUtf8 $ Builtins.toBuiltin $ pack $ show $ txOutRefIdx ou 
+           idx = Builtins.consByteString (txOutRefIdx ou) Builtins.emptyByteString
 
 -- Verify if a Tx output has a some lovelace value                                 
 {-# INLINABLE hasLovelaveAtUtxo #-}

@@ -23,9 +23,8 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
        where
            givingPath :: Bool
            givingPath = traceIfFalse "UTxO not consumed" hasUTxO &&
-                        traceIfFalse "Wrong ammount minted" checkMintedAmount &&
-                        traceIfFalse "Not original or upgrade mint" checkIfOriginalOrUpgrade && 
-                        traceIfFalse "Produced outputs are not correct" checkProducedOutput
+                        traceIfFalse "Wrong ammount minted" checkMintedToken &&
+                        traceIfFalse "Not original or upgrade mint" checkIfOriginalOrUpgrade 
                         
            info :: TxInfo
            info = scriptContextTxInfo sContext
@@ -36,15 +35,12 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
            curSymbol :: CurrencySymbol
            curSymbol = Contexts.ownCurrencySymbol sContext
 
-           utxoOutputs :: [TxOut]
-           utxoOutputs = txInfoOutputs info
-
            hasUTxO :: Bool
            hasUTxO = any (\utxo -> txInInfoOutRef utxo == outRef) utxoInputs
   
-           checkMintedAmount :: Bool
-           checkMintedAmount = case getMintedTokenValue $ flattenValue (txInfoMint info) of
-              (_, tkName', amount)   ->  tkName' == tkName && amount == mintAmount              
+           checkMintedToken :: Bool
+           checkMintedToken = case getMintedTokenValue $ flattenValue (txInfoMint info) of
+              (_, tkName', amount)   ->  checkUniqueTokenName tkName' && amount == mintAmount              
            
            checkIfOriginalOrUpgrade :: Bool
            checkIfOriginalOrUpgrade = checkIfOriginal || checkIfUpgrade          
@@ -54,6 +50,12 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
               
            checkIfSigned :: Bool
            checkIfSigned = txSignedBy (scriptContextTxInfo sContext) $ unPaymentPubKeyHash pkHash
+           
+           checkUniqueTokenName :: TokenName -> Bool
+           checkUniqueTokenName tn = tn == regenerateUniqueTokenName outRef tn
+           
+           regenerateUniqueTokenName :: TxOutRef -> TokenName -> TokenName
+           regenerateUniqueTokenName oref tn = uniqueName (TokenName (Builtins.sliceByteString 0 18 $ unTokenName tn)) oref
            
            tokenId :: BuiltinByteString
            tokenId = Builtins.sliceByteString 10 7 $ unTokenName tkName 
@@ -110,11 +112,7 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
            hasSerumInput = any (\utxo -> isInputSerum utxo) utxoInputs
            
            isInputSerum :: TxInInfo -> Bool
-           isInputSerum = (\tx ->  hasTokenAtUtxo tx curSymbol serumString) . txInInfoResolved 
-           
-           -- todo
-           checkProducedOutput :: Bool
-           checkProducedOutput = (>) (length utxoOutputs) 0        
+           isInputSerum = (\tx ->  hasTokenAtUtxo tx curSymbol serumString) . txInInfoResolved       
 
 -- Defining policy script
 policy :: PaymentPubKeyHash -> RedeemerParam -> Scripts.MintingPolicy
