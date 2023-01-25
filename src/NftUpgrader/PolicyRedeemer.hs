@@ -5,7 +5,8 @@ module NftUpgrader.PolicyRedeemer where
 
 import qualified PlutusTx
 import           PlutusTx.Prelude
-import           Ledger             (TxOutRef, TokenName)
+import           Plutus.V2.Ledger.Api     (TxOutRef)
+import           Ledger                   (TokenName)
 
 -- Defining custom redeemer
 data RedeemerParam = RP

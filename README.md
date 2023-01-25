@@ -1,6 +1,8 @@
 # Plutus Upgradeable NFTs
 Final project for Cardano Developer Professional course
 
+Ported to PlutusV2, compatible with [Plutus Application Framework v1.1.0](https://github.com/input-output-hk/plutus-apps/releases/tag/v1.1.0)  
+
 # Halloween P2E
 This contract implementation is focused on the concept of NFT upgradeability through crafting, where two tokens are consumed to produce a new one.
 More specifically, the upgrade is enabled by applying a serum on an NFT of the same level, i.e. L1 + S1 = L2 .. and so on.
@@ -60,7 +62,7 @@ To build and run the project you need to:
 
 2. Use git to clone the official Plutus Application Framework and checkout the tagged commit.
   - repo: https://github.com/input-output-hk/plutus-apps.git
-  - tag:62efdd2bfab3e076d40e07f8f4d7864a7f2ccc91
+  - tag:v1.0.0
 
 3. Clone the `plutus-upgradeable-nfts` repository too.
 

@@ -9,16 +9,18 @@ import           NftUpgrader.PolicyRedeemer
 import           NftUpgrader.Utility
 
 import qualified PlutusTx
-import           PlutusTx.Prelude               hiding (Semigroup(..), unless)
-import qualified PlutusTx.Builtins              as Builtins
-import           Ledger                         hiding (mint, singleton)
-import qualified Ledger.Typed.Scripts           as Scripts
-import           Ledger.Value                   as Value
-import qualified Ledger.Contexts                as Contexts
+import           PlutusTx.Prelude                              hiding (Semigroup(..), unless)
+import qualified PlutusTx.Builtins                             as Builtins
+import           Ledger.Address                                ()
+import           Plutus.V2.Ledger.Api                          (PubKeyHash, ScriptContext, TxInfo, TxInInfo, TxOutRef, scriptContextTxInfo, txInfoInputs, txInInfoOutRef, txInfoMint, mkMintingPolicyScript)
+import           Plutus.Script.Utils.V2.Typed.Scripts          (MintingPolicy, mkUntypedMintingPolicy)
+import           Plutus.Script.Utils.V2.Scripts                (scriptCurrencySymbol)
+import           Ledger.Value                                  as Value
+import           Plutus.V2.Ledger.Contexts                     (ownCurrencySymbol, txSignedBy, txInInfoResolved)
 
 -- Defining Minting Validator
 {-# INLINABLE tokenPolicy #-}
-tokenPolicy :: PaymentPubKeyHash -> RedeemerParam -> ScriptContext -> Bool
+tokenPolicy :: PubKeyHash -> RedeemerParam -> ScriptContext -> Bool
 tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can not mint the NFT"  givingPath 
        where
            givingPath :: Bool
@@ -33,7 +35,7 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
            utxoInputs = txInfoInputs info
 
            curSymbol :: CurrencySymbol
-           curSymbol = Contexts.ownCurrencySymbol sContext
+           curSymbol = ownCurrencySymbol sContext
 
            hasUTxO :: Bool
            hasUTxO = any (\utxo -> txInInfoOutRef utxo == outRef) utxoInputs
@@ -49,7 +51,7 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
            checkIfOriginal = checkIfSigned && checkIfGenesis
               
            checkIfSigned :: Bool
-           checkIfSigned = txSignedBy (scriptContextTxInfo sContext) $ unPaymentPubKeyHash pkHash
+           checkIfSigned = txSignedBy (scriptContextTxInfo sContext) pkHash          
            
            checkUniqueTokenName :: TokenName -> Bool
            checkUniqueTokenName tn = tn == regenerateUniqueTokenName outRef tn
@@ -115,15 +117,15 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
            isInputSerum = (\tx ->  hasTokenAtUtxo tx curSymbol serumString) . txInInfoResolved       
 
 -- Defining policy script
-policy :: PaymentPubKeyHash -> RedeemerParam -> Scripts.MintingPolicy
+policy :: PubKeyHash -> RedeemerParam -> MintingPolicy
 policy pkHash redeemer = mkMintingPolicyScript $ 
-                $$(PlutusTx.compile [|| Scripts.wrapMintingPolicy . tokenPolicy ||]) 
+                $$(PlutusTx.compile [|| mkUntypedMintingPolicy . tokenPolicy ||]) 
                   `PlutusTx.applyCode`
                     PlutusTx.liftCode pkHash
 
 -- Extracting policy ID    
 {-# INLINABLE tokenSymbol #-}
-tokenSymbol :: PaymentPubKeyHash -> RedeemerParam -> CurrencySymbol
+tokenSymbol :: PubKeyHash -> RedeemerParam -> CurrencySymbol
 tokenSymbol pkHash = scriptCurrencySymbol . policy pkHash
 
 -- Byte values

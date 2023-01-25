@@ -1,7 +1,7 @@
-cabal-version:      2.4
+cabal-version:      3.6
 
 name:               NftUpgrader
-version:            0.1.0.0
+version:            0.1.1.0
 synopsis:           NFT Upgrader Plutus Project
 license:            MIT
 author:             Zakhar Deyneka
@@ -19,20 +19,23 @@ library
     
     build-depends:    base ^>=4.14.1.0
                     , aeson
+                    , bytestring
+                    , cardano-api
                     , containers
-                    , data-default
+                    , data-default 
                     , freer-extras
-                    , playground-common
-                    , plutus-contract
-                    , plutus-ledger
-                    , plutus-ledger-api
-                    , plutus-ledger-constraints
-                    , plutus-tx-plugin
-                    , plutus-tx
-                    , text
-                    
+                    , playground-common 
+                    , plutus-contract 
+                    , plutus-ledger 
+                    , plutus-ledger-api 
+                    , plutus-ledger-constraints 
+                    , plutus-script-utils
+                    , plutus-tx 
+                    , plutus-tx-plugin 
+                    , text 
+                    , lens 
+                    , serialise 
     hs-source-dirs:   src
-    
     default-language: Haskell2010
-    
-    ghc-options: -Wall -fobject-code -fno-ignore-interface-pragmas -fno-omit-interface-pragmas -fno-strictness -fno-spec-constr -fno-specialise
+
+    ghc-options:         -Wall -fobject-code -fno-ignore-interface-pragmas -fno-omit-interface-pragmas -fno-strictness -fno-spec-constr -fno-specialise

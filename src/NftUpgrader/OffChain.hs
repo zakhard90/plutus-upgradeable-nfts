@@ -27,18 +27,22 @@ import           Plutus.Contract                as Contract
 import qualified PlutusTx
 import           PlutusTx.Prelude               hiding (Semigroup(..), unless)
 import qualified PlutusTx.Builtins              as Builtins
-import           Ledger                         hiding (mint, singleton)
+import           Ledger.Address
+import           Ledger.Tx                      hiding (txOutValue)                       
+import           Ledger.Constraints.OffChain    ()
 import           Ledger.Constraints             as Constraints
 import           Ledger.Ada                     as Ada
 import           Ledger.Value                   as Value
+import           Plutus.V2.Ledger.Api           (Redeemer (..), txOutValue)
+import           Plutus.V2.Ledger.Contexts      ()    
 import           Prelude                        (Show (..), String, Semigroup(..))
 import           Text.Printf                    (printf)
                                                         
 -- Defining minting function
 mintDrop :: NFTMintParams -> Contract w NFTSchema Text ()
 mintDrop mParams = do   
-               utxos <- utxosAt $ mAddress mParams  
-               pkHash <- Contract.ownPaymentPubKeyHash   
+               utxos <- Contract.ownUtxos  
+               paymentPkHash <- Contract.ownFirstPaymentPubKeyHash
                
                Contract.logInfo @String $ printf "MINT"
   
@@ -46,6 +50,7 @@ mintDrop mParams = do
                  []       -> Contract.logError @String "No UTxO found on the provied Address!" 
                  oref : _ -> do 
                                 let tkName     = uniqueName (mToken mParams) oref
+                                    pkHash     = unPaymentPubKeyHash $ paymentPkHash
                                     policyId   = tokenSymbol pkHash redeemer
                                     mintPolicy = (policy pkHash redeemer)
                                     
@@ -57,9 +62,10 @@ mintDrop mParams = do
                                     redeemer   = (RP oref tkName mAmt)
                                     nft        = Value.singleton policyId tkName mAmt 
                                     val        = (Ada.lovelaceValueOf 2_000_000) <> nft
-                                    lookups    = Constraints.mintingPolicy mintPolicy  <>
+                                    lookups    = plutusV2MintingPolicy mintPolicy  <>
                                                  Constraints.unspentOutputs utxos
-                                    tx         = Constraints.mustMintValueWithRedeemer (Redeemer $ PlutusTx.toBuiltinData redeemer) nft <>                                               Constraints.mustSpendPubKeyOutput oref <> 
+                                    tx         = Constraints.mustBeSignedBy paymentPkHash <>
+                                                 Constraints.mustMintValueWithRedeemer (Redeemer $ PlutusTx.toBuiltinData redeemer) nft <>                                               Constraints.mustSpendPubKeyOutput oref <> 
                                                  Constraints.mustPayToPubKey (PaymentPubKeyHash $ Maybe.fromJust $ toPubKeyHash $ mReceiver mParams) val
                                 
                                 Contract.logInfo @String $ printf "TokenName length --> %d" (Builtins.lengthOfByteString $ unTokenName tkName) 
@@ -75,6 +81,7 @@ mintDrop mParams = do
 mintUpgrade :: NFTUpgradeParams -> Contract w NFTSchema Text ()
 mintUpgrade uParams = do   
              utxos <- utxosAt $ uAddress uParams 
+             paymentPkHash <- Contract.ownFirstPaymentPubKeyHash
              
              Contract.logInfo @String $ printf "UPGRADE"
              Contract.logInfo @String $ printf "UTxOs count      --> %s" (show $ length (Map.keys utxos))
@@ -85,16 +92,16 @@ mintUpgrade uParams = do
                [_,_] -> Contract.logError @String "Only two UTxOs found on the provied Address!"
                xs  -> do
                         let (or1,ot1) = PlutusTx.Prelude.head $ 
-                                        PlutusTx.Prelude.filter (\(_,x) -> hasLovelaveAtUtxo (toTxOut x)) xs
+                                        PlutusTx.Prelude.filter (\(_,x) -> hasLovelaveAtUtxo (toTxInfoTxOut x)) xs
                             (or2,ot2) = PlutusTx.Prelude.head $ 
-                                        PlutusTx.Prelude.filter (\(_,x) -> hasTokenAtUtxo (toTxOut x) policyId prevNftStr) xs
+                                        PlutusTx.Prelude.filter (\(_,x) -> hasTokenAtUtxo (toTxInfoTxOut x) policyId prevNftStr) xs
                             (or3,ot3) = PlutusTx.Prelude.head $ 
-                                        PlutusTx.Prelude.filter (\(_,x) -> hasTokenAtUtxo (toTxOut x) policyId serumStr) xs
+                                        PlutusTx.Prelude.filter (\(_,x) -> hasTokenAtUtxo (toTxInfoTxOut x) policyId serumStr) xs
 
-                            inTkName  = getTokenNameFromValue $ txOutValue $ toTxOut ot2
-                            inSrName  = getTokenNameFromValue $ txOutValue $ toTxOut ot3
+                            inTkName  = getTokenNameFromValue $ txOutValue $ toTxInfoTxOut ot2
+                            inSrName  = getTokenNameFromValue $ txOutValue $ toTxInfoTxOut ot3
 
-                            pkhMinter  = PaymentPubKeyHash $ Maybe.fromJust $ toPubKeyHash $ uMinter uParams
+                            pkhMinter  = Maybe.fromJust $ toPubKeyHash $ uMinter uParams
                             tkName     = uniqueName (uToken uParams) or1
                             prevNftStr = buildPreviousLevelString tkName
                             serumStr   = buildSerumString tkName                  
@@ -112,10 +119,11 @@ mintUpgrade uParams = do
                             inNft      = Value.singleton policyId inTkName $ negate mAmt
                             inSerum    = Value.singleton policyId inSrName $ negate mAmt  
                             val        = (Ada.lovelaceValueOf 2_000_000) <> upNft
-                            lookups    = Constraints.mintingPolicy mintPolicy <>
+                            lookups    = plutusV2MintingPolicy mintPolicy <>
                                          Constraints.unspentOutputs utxos
                                                  
-                            tx         = Constraints.mustMintValueWithRedeemer (Redeemer $ PlutusTx.toBuiltinData redeemer) upNft <>                                       Constraints.mustSpendPubKeyOutput or1 <>
+                            tx         = Constraints.mustBeSignedBy paymentPkHash <>
+                                         Constraints.mustMintValueWithRedeemer (Redeemer $ PlutusTx.toBuiltinData redeemer) upNft <>                                       Constraints.mustSpendPubKeyOutput or1 <>
                                          Constraints.mustSpendPubKeyOutput or2 <>
                                          Constraints.mustSpendPubKeyOutput or3 <>
                                          Constraints.mustMintValueWithRedeemer (Redeemer $ PlutusTx.toBuiltinData redeemer) inNft <>
@@ -127,9 +135,9 @@ mintUpgrade uParams = do
                         Contract.logInfo @String $ printf "Prev. Level      --> %s" (show $ prevNftStr) 
                         Contract.logInfo @String $ printf "Serum            --> %s" (show $ serumStr) 
                                
-                        Contract.logInfo @String $ printf "UTxO 1 has ada   --> %s" (show $ hasLovelaveAtUtxo (toTxOut ot1))
-                        Contract.logInfo @String $ printf "UTxO 2 has token --> %s" (show $ hasTokenAtUtxo (toTxOut ot2) policyId prevNftStr)
-                        Contract.logInfo @String $ printf "UTxO 3 has serum --> %s" (show $ hasTokenAtUtxo (toTxOut ot3) policyId serumStr)
+                        Contract.logInfo @String $ printf "UTxO 1 has ada   --> %s" (show $ hasLovelaveAtUtxo (toTxInfoTxOut  ot1))
+                        Contract.logInfo @String $ printf "UTxO 2 has token --> %s" (show $ hasTokenAtUtxo (toTxInfoTxOut  ot2) policyId prevNftStr)
+                        Contract.logInfo @String $ printf "UTxO 3 has serum --> %s" (show $ hasTokenAtUtxo (toTxInfoTxOut ot3) policyId serumStr)
 
                         ledgerTx <- submitTxConstraintsWith @Void lookups tx
                         void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
@@ -139,7 +147,6 @@ mintUpgrade uParams = do
 data NFTMintParams = NFTMintParams
     { mToken    :: !TokenName
     , mAmount   :: !Integer
-    , mAddress  :: !Address
     , mReceiver :: !Address
     } deriving (Generic, FromJSON, ToJSON, Show)
 

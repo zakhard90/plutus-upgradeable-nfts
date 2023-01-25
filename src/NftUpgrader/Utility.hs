@@ -4,10 +4,12 @@ module NftUpgrader.Utility where
 
 import           PlutusTx.Prelude               hiding (Semigroup(..), unless)
 import qualified PlutusTx.Builtins              as Builtins
-import           Ledger                         hiding (mint, singleton)
+import           Ledger                         hiding (TxOut, mint, singleton, txOutValue)
 import           Ledger.Ada                     as Ada
+import           Plutus.V2.Ledger.Api           (TxOut, txOutValue)
+import           Plutus.Script.Utils.Scripts    ()
 import           Ledger.Value                   as Value
-import           Prelude                        (Show)
+import           Prelude                        ()
 
 -- Enforce a really unique value for the token name
 {-# INLINABLE uniqueName #-}
@@ -108,4 +110,4 @@ buildPreviousLevelString :: TokenName -> BuiltinByteString
 buildPreviousLevelString tkName = Builtins.appendByteString base tLevel
    where 
      base   = Builtins.sliceByteString 0 16 $ unTokenName tkName 
-     tLevel = Builtins.consByteString ((Builtins.indexByteString (Builtins.sliceByteString 16 1 $ unTokenName tkName) 0) - 1) Builtins.emptyByteString               
+     tLevel = Builtins.consByteString ((Builtins.indexByteString (Builtins.sliceByteString 16 1 $ unTokenName tkName) 0) - 1) Builtins.emptyByteString    
