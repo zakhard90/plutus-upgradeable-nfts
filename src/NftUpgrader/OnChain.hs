@@ -11,17 +11,16 @@ import           NftUpgrader.Utility
 import qualified PlutusTx
 import           PlutusTx.Prelude                              hiding (Semigroup(..), unless)
 import qualified PlutusTx.Builtins                             as Builtins
-import           Ledger.Address
-import qualified Plutus.V2.Ledger.Api                          as PlutusV2
-import qualified Plutus.Script.Utils.V1.Typed.Scripts          as TypedScripts
-import qualified Plutus.Script.Utils.V2.Typed.Scripts          as TypedScriptsV2
-import qualified Plutus.Script.Utils.V2.Scripts                as ScriptsV2
+import           Ledger.Address                                ()
+import           Plutus.V2.Ledger.Api                          (PubKeyHash, ScriptContext, TxInfo, TxInInfo, TxOutRef, scriptContextTxInfo, txInfoInputs, txInInfoOutRef, txInfoMint, mkMintingPolicyScript)
+import           Plutus.Script.Utils.V2.Typed.Scripts          (MintingPolicy, mkUntypedMintingPolicy)
+import           Plutus.Script.Utils.V2.Scripts                (scriptCurrencySymbol)
 import           Ledger.Value                                  as Value
 import           Plutus.V2.Ledger.Contexts                     (ownCurrencySymbol, txSignedBy, txInInfoResolved)
 
 -- Defining Minting Validator
 {-# INLINABLE tokenPolicy #-}
-tokenPolicy :: PaymentPubKeyHash -> RedeemerParam -> PlutusV2.ScriptContext -> Bool
+tokenPolicy :: PubKeyHash -> RedeemerParam -> ScriptContext -> Bool
 tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can not mint the NFT"  givingPath 
        where
            givingPath :: Bool
@@ -29,20 +28,20 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
                         traceIfFalse "Wrong ammount minted" checkMintedToken &&
                         traceIfFalse "Not original or upgrade mint" checkIfOriginalOrUpgrade 
                         
-           info :: PlutusV2.TxInfo
-           info = PlutusV2.scriptContextTxInfo sContext
+           info :: TxInfo
+           info = scriptContextTxInfo sContext
            
-           utxoInputs :: [PlutusV2.TxInInfo]
-           utxoInputs = PlutusV2.txInfoInputs info
+           utxoInputs :: [TxInInfo]
+           utxoInputs = txInfoInputs info
 
            curSymbol :: CurrencySymbol
            curSymbol = ownCurrencySymbol sContext
 
            hasUTxO :: Bool
-           hasUTxO = any (\utxo -> PlutusV2.txInInfoOutRef utxo == outRef) utxoInputs
+           hasUTxO = any (\utxo -> txInInfoOutRef utxo == outRef) utxoInputs
   
            checkMintedToken :: Bool
-           checkMintedToken = case getMintedTokenValue $ flattenValue (PlutusV2.txInfoMint info) of
+           checkMintedToken = case getMintedTokenValue $ flattenValue (txInfoMint info) of
               (_, tkName', amount)   ->  checkUniqueTokenName tkName' && amount == mintAmount              
            
            checkIfOriginalOrUpgrade :: Bool
@@ -52,12 +51,12 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
            checkIfOriginal = checkIfSigned && checkIfGenesis
               
            checkIfSigned :: Bool
-           checkIfSigned = txSignedBy (PlutusV2.scriptContextTxInfo sContext) $ unPaymentPubKeyHash pkHash
+           checkIfSigned = txSignedBy (scriptContextTxInfo sContext) pkHash          
            
            checkUniqueTokenName :: TokenName -> Bool
            checkUniqueTokenName tn = tn == regenerateUniqueTokenName outRef tn
            
-           regenerateUniqueTokenName :: PlutusV2.TxOutRef -> TokenName -> TokenName
+           regenerateUniqueTokenName :: TxOutRef -> TokenName -> TokenName
            regenerateUniqueTokenName oref tn = uniqueName (TokenName (Builtins.sliceByteString 0 18 $ unTokenName tn)) oref
            
            tokenId :: BuiltinByteString
@@ -108,26 +107,26 @@ tokenPolicy pkHash (RP outRef tkName mintAmount) sContext = traceIfFalse "Can no
            hasNftInput :: Bool
            hasNftInput = any (\utxo -> isInputNftCurrency utxo) utxoInputs
            
-           isInputNftCurrency :: PlutusV2.TxInInfo -> Bool
+           isInputNftCurrency :: TxInInfo -> Bool
            isInputNftCurrency = (\tx ->  hasTokenAtUtxo tx curSymbol ptkString) . txInInfoResolved 
            
            hasSerumInput :: Bool
            hasSerumInput = any (\utxo -> isInputSerum utxo) utxoInputs
            
-           isInputSerum :: PlutusV2.TxInInfo -> Bool
+           isInputSerum :: TxInInfo -> Bool
            isInputSerum = (\tx ->  hasTokenAtUtxo tx curSymbol serumString) . txInInfoResolved       
 
 -- Defining policy script
-policy :: PaymentPubKeyHash -> RedeemerParam -> TypedScripts.MintingPolicy
-policy pkHash redeemer = PlutusV2.mkMintingPolicyScript $ 
-                $$(PlutusTx.compile [|| TypedScriptsV2.mkUntypedMintingPolicy . tokenPolicy ||]) 
+policy :: PubKeyHash -> RedeemerParam -> MintingPolicy
+policy pkHash redeemer = mkMintingPolicyScript $ 
+                $$(PlutusTx.compile [|| mkUntypedMintingPolicy . tokenPolicy ||]) 
                   `PlutusTx.applyCode`
                     PlutusTx.liftCode pkHash
 
 -- Extracting policy ID    
 {-# INLINABLE tokenSymbol #-}
-tokenSymbol :: PaymentPubKeyHash -> RedeemerParam -> CurrencySymbol
-tokenSymbol pkHash = ScriptsV2.scriptCurrencySymbol . policy pkHash
+tokenSymbol :: PubKeyHash -> RedeemerParam -> CurrencySymbol
+tokenSymbol pkHash = scriptCurrencySymbol . policy pkHash
 
 -- Byte values
 

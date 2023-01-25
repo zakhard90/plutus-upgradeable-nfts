@@ -33,24 +33,21 @@ upgradeSequence = runEmulatorTraceIO $ do
     callEndpoint @"mint" h1 $ NFTMintParams
         { mToken    = t1
         , mAmount   = q1
-        , mAddress  = mockWalletAddress w1
         , mReceiver = mockWalletAddress w2
         }
     void $ Emulator.waitNSlots 1
     callEndpoint @"mint" h1 $ NFTMintParams
         { mToken    = s1
         , mAmount   = qs
-        , mAddress  = mockWalletAddress w1
         , mReceiver = mockWalletAddress w2
         }      
     void $ Emulator.waitNSlots 1
     callEndpoint @"mint" h1 $ NFTMintParams
         { mToken    = t2
         , mAmount   = q2
-        , mAddress  = mockWalletAddress w1
         , mReceiver = mockWalletAddress w1
         }
-    void $ Emulator.waitNSlots 1
+    void $ Emulator.waitNSlots 1 
     callEndpoint @"upgrade" h2 $ NFTUpgradeParams
         { uToken    = u1
         , uAddress  = mockWalletAddress w2
@@ -77,14 +74,12 @@ upgradeAdvSequence = runEmulatorTraceIO $ do
     callEndpoint @"mint" h1 $ NFTMintParams
         { mToken    = t1
         , mAmount   = q
-        , mAddress  = mockWalletAddress w1
         , mReceiver = mockWalletAddress w2
         }
     void $ Emulator.waitNSlots 1    
     callEndpoint @"mint" h1 $ NFTMintParams
         { mToken    = s1
         , mAmount   = qs
-        , mAddress  = mockWalletAddress w1
         , mReceiver = mockWalletAddress w2
         }   
     void $ Emulator.waitNSlots 1    
@@ -99,7 +94,6 @@ upgradeAdvSequence = runEmulatorTraceIO $ do
     callEndpoint @"mint" h1 $ NFTMintParams
         { mToken    = s2
         , mAmount   = qs
-        , mAddress  = mockWalletAddress w1
         , mReceiver = mockWalletAddress w2
         }   
     void $ Emulator.waitNSlots 1    
